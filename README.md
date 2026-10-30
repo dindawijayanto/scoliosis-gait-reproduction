@@ -7,7 +7,7 @@ This folder has two parts:
 
 | Folder | What it is |
 |---|---|
-| `self_learning/` | My own small notebooks where I rebuilt each piece by hand to understand it: raw → pkl, pkl → ScoNet, and the six Table 4 variants on 12 children. |
+| `self_learning/` | My own small notebooks where I rebuilt each piece to understand it: raw → pkl, pkl → ScoNet, and the six Table 4 variants on 12 children. |
 | `reproduce/` | The real reproduction: the official OpenGait code and the paper's settings, trained on RunPod, plus the notebooks that analyse the results. |
 
 ## What is not on GitHub
