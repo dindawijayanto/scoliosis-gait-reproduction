@@ -1,0 +1,12 @@
+reproduce/datasets/Scoliosis1K-sil-pkl/
+*.pkl
+*.zip
+
+*.pt
+**/summary/
+
+reproduce/model_sconet/output/
+reproduce/model_cnn/output/
+
+__pycache__/
+.ipynb_checkpoints/

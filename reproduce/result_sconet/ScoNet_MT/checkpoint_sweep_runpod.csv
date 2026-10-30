@@ -1,0 +1,11 @@
+iteration,accuracy,macro_recall,source
+2000,27.24,33.33,RunPod terminal 2026-10-28 15:55
+4000,28.97,35.85,RunPod terminal 2026-10-28 15:56
+6000,35.51,46.93,RunPod terminal 2026-10-28 15:56
+8000,27.24,33.33,RunPod terminal 2026-10-28 15:56
+10000,28.57,35.24,RunPod terminal 2026-10-28 15:57
+12000,82.38,80.79,RunPod terminal 2026-10-28 15:57
+14000,64.09,60.29,RunPod terminal 2026-10-28 15:58
+16000,82.64,75.53,RunPod terminal 2026-10-28 15:58
+18000,78.64,71.18,RunPod terminal 2026-10-28 15:59
+20000,76.77,70.25,RunPod terminal 2026-10-28 15:59

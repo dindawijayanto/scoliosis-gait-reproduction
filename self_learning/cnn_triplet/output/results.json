@@ -1,0 +1,68 @@
+{
+  "experiment": "cnn_triplet",
+  "version": 2,
+  "train_children": {
+    "negative": [
+      "00546",
+      "00839",
+      "01015",
+      "01068"
+    ],
+    "neutral": [
+      "01409",
+      "01437",
+      "01468",
+      "01473"
+    ],
+    "positive": [
+      "00221",
+      "00332",
+      "00422",
+      "00429"
+    ]
+  },
+  "test_children": {
+    "negative": [
+      "00536",
+      "00914",
+      "00937",
+      "01243"
+    ],
+    "neutral": [
+      "01340",
+      "01384",
+      "01387",
+      "01486"
+    ],
+    "positive": [
+      "00172",
+      "00237",
+      "00282",
+      "00473"
+    ]
+  },
+  "iterations": 300,
+  "lr": 0.001,
+  "skipped_fp16_steps": 6,
+  "train": {
+    "accuracy": 100.0,
+    "precision": 100.0,
+    "recall": 100.0,
+    "f1": 100.0,
+    "sensitivity": 100.0,
+    "specificity": 100.0
+  },
+  "test": {
+    "accuracy": 66.66666666666666,
+    "precision": 66.66666666666666,
+    "recall": 66.66666666666666,
+    "f1": 66.66666666666666,
+    "sensitivity": 75.0,
+    "specificity": 75.0
+  },
+  "paper_full_test_set": {
+    "accuracy": 56.3,
+    "sensitivity": 77.0,
+    "specificity": 85.0
+  }
+}

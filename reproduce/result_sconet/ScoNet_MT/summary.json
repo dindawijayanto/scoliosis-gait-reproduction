@@ -1,0 +1,146 @@
+{
+  "run": "ScoNet_MT",
+  "family": "sconet",
+  "config": "sconet_mt.yaml",
+  "paper": {
+    "name": "ScoNet-MT",
+    "accuracy": 82.0,
+    "sensitivity": 99.0,
+    "specificity": 76.5
+  },
+  "training_hours": 2.7074333333333347,
+  "sweep": [
+    {
+      "iteration": 2000,
+      "accuracy": 27.24,
+      "macro_recall": 33.33,
+      "source": "RunPod terminal 2026-10-28 15:55"
+    },
+    {
+      "iteration": 4000,
+      "accuracy": 28.97,
+      "macro_recall": 35.85,
+      "source": "RunPod terminal 2026-10-28 15:56"
+    },
+    {
+      "iteration": 6000,
+      "accuracy": 35.51,
+      "macro_recall": 46.93,
+      "source": "RunPod terminal 2026-10-28 15:56"
+    },
+    {
+      "iteration": 8000,
+      "accuracy": 27.24,
+      "macro_recall": 33.33,
+      "source": "RunPod terminal 2026-10-28 15:56"
+    },
+    {
+      "iteration": 10000,
+      "accuracy": 28.57,
+      "macro_recall": 35.24,
+      "source": "RunPod terminal 2026-10-28 15:57"
+    },
+    {
+      "iteration": 12000,
+      "accuracy": 82.38,
+      "macro_recall": 80.79,
+      "source": "RunPod terminal 2026-10-28 15:57"
+    },
+    {
+      "iteration": 14000,
+      "accuracy": 64.09,
+      "macro_recall": 60.29,
+      "source": "RunPod terminal 2026-10-28 15:58"
+    },
+    {
+      "iteration": 16000,
+      "accuracy": 82.64,
+      "macro_recall": 75.53,
+      "source": "RunPod terminal 2026-10-28 15:58"
+    },
+    {
+      "iteration": 18000,
+      "accuracy": 78.64,
+      "macro_recall": 71.18,
+      "source": "RunPod terminal 2026-10-28 15:59"
+    },
+    {
+      "iteration": 20000,
+      "accuracy": 76.77,
+      "macro_recall": 70.25,
+      "source": "RunPod terminal 2026-10-28 15:59"
+    }
+  ],
+  "final": {
+    "iteration": 20000,
+    "cm": [
+      [
+        204,
+        0,
+        0
+      ],
+      [
+        83,
+        40,
+        3
+      ],
+      [
+        86,
+        2,
+        331
+      ]
+    ],
+    "accuracy": 76.7690253671562,
+    "macro_precision": 83.01052688444126,
+    "macro_recall": 70.24788170372895,
+    "macro_f1": 68.74820872763246,
+    "recall": [
+      100.0,
+      31.746031746031743,
+      78.99761336515513
+    ],
+    "precision": [
+      54.6916890080429,
+      95.23809523809523,
+      99.10179640718563
+    ],
+    "sensitivity": 78.99761336515513,
+    "specificity": 100.0
+  },
+  "best_on_test": {
+    "iteration": 16000,
+    "cm": [
+      [
+        201,
+        0,
+        3
+      ],
+      [
+        72,
+        51,
+        3
+      ],
+      [
+        49,
+        3,
+        367
+      ]
+    ],
+    "accuracy": 82.64352469959947,
+    "macro_precision": 85.08607520147326,
+    "macro_recall": 75.53170034919297,
+    "macro_f1": 75.25642995224744,
+    "recall": [
+      98.52941176470588,
+      40.476190476190474,
+      87.58949880668257
+    ],
+    "precision": [
+      62.422360248447205,
+      94.44444444444444,
+      98.39142091152814
+    ],
+    "sensitivity": 87.58949880668257,
+    "specificity": 98.52941176470588
+  }
+}

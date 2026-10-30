@@ -1,0 +1,68 @@
+{
+  "experiment": "sconet",
+  "version": 2,
+  "train_children": {
+    "negative": [
+      "00546",
+      "00839",
+      "01015",
+      "01068"
+    ],
+    "neutral": [
+      "01409",
+      "01437",
+      "01468",
+      "01473"
+    ],
+    "positive": [
+      "00221",
+      "00332",
+      "00422",
+      "00429"
+    ]
+  },
+  "test_children": {
+    "negative": [
+      "00536",
+      "00914",
+      "00937",
+      "01243"
+    ],
+    "neutral": [
+      "01340",
+      "01384",
+      "01387",
+      "01486"
+    ],
+    "positive": [
+      "00172",
+      "00237",
+      "00282",
+      "00473"
+    ]
+  },
+  "iterations": 300,
+  "lr": 0.001,
+  "skipped_fp16_steps": 2,
+  "train": {
+    "accuracy": 91.66666666666666,
+    "precision": 93.33333333333333,
+    "recall": 91.66666666666666,
+    "f1": 91.53439153439153,
+    "sensitivity": 75.0,
+    "specificity": 100.0
+  },
+  "test": {
+    "accuracy": 33.33333333333333,
+    "precision": 11.11111111111111,
+    "recall": 33.33333333333333,
+    "f1": 16.666666666666664,
+    "sensitivity": 0.0,
+    "specificity": 0.0
+  },
+  "paper_full_test_set": {
+    "accuracy": 51.3,
+    "sensitivity": 100.0,
+    "specificity": 33.2
+  }
+}

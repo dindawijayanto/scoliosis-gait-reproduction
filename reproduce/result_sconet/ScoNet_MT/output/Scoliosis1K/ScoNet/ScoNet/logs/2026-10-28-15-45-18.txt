@@ -1,0 +1,12 @@
+[2026-10-28 15:45:18] [INFO]: {'enable_float16': True, 'restore_ckpt_strict': True, 'restore_hint': 20000, 'save_name': 'ScoNet', 'eval_func': 'evaluate_scoliosis', 'sampler': {'batch_size': 1, 'sample_type': 'all_ordered', 'type': 'InferenceSampler', 'batch_shuffle': False, 'frames_all_limit': 720}, 'transform': [{'type': 'BaseSilCuttingTransform'}], 'metric': 'euc', 'cross_view_gallery': False}
+[2026-10-28 15:45:18] [INFO]: {'model': 'ScoNet', 'backbone_cfg': {'type': 'ResNet9', 'block': 'BasicBlock', 'channels': [64, 128, 256, 512], 'layers': [1, 1, 1, 1], 'strides': [1, 2, 2, 1], 'maxpool': False}, 'SeparateFCs': {'in_channels': 512, 'out_channels': 256, 'parts_num': 16}, 'SeparateBNNecks': {'class_num': 3, 'in_channels': 256, 'parts_num': 16}, 'bin_num': [16]}
+[2026-10-28 15:45:18] [INFO]: {'dataset_name': 'Scoliosis1K', 'dataset_root': '/workspace/data/Scoliosis1K-sil-pkl', 'num_workers': 8, 'dataset_partition': './datasets/Scoliosis1K/Scoliosis1K_118.json', 'remove_no_gallery': False, 'cache': True, 'test_dataset_name': 'Scoliosis1K'}
+[2026-10-28 15:45:18] [INFO]: -------- Test Pid List --------
+[2026-10-28 15:45:18] [INFO]: [01466, 01321, ..., 01304], Len: 749
+[2026-10-28 15:45:19] [INFO]: Restore Parameters from output/Scoliosis1K/ScoNet/ScoNet/checkpoints/ScoNet-20000.pt !!!
+[2026-10-28 15:45:19] [INFO]: Parameters Count: 7.01459M
+[2026-10-28 15:45:19] [INFO]: Model Initialization Finished!
+[2026-10-28 15:45:37] [INFO]: Total Accuracy: 76.77%
+[2026-10-28 15:45:37] [INFO]: Macro-avg Precision: 83.01%
+[2026-10-28 15:45:37] [INFO]: Macro-avg Recall: 70.25%
+[2026-10-28 15:45:37] [INFO]: Macro-avg F1 Score: 68.75%

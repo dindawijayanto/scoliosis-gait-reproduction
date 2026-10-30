@@ -1,0 +1,8 @@
+# Packages imported by the OpenGait files in model_sconet/ and model_cnn/.
+# PyTorch and torchvision come with the RunPod PyTorch template.
+pyyaml
+tqdm
+tensorboard
+opencv-python-headless
+einops
+scikit-learn
