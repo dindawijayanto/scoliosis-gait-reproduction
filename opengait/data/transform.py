@@ -722,3 +722,45 @@ class MSGGTransform():
     def __call__(self, x):
         result=x[...,self.mask,:].copy()
         return result
+
+# **************** Scoliosis1K: global-lean removal (exp_2) ****************
+class DeskewSilCuttingTransform():
+    """BaseSilCuttingTransform after removing the global left/right lean of every frame.
+
+    For each frame, fit x_center(row) = a * row + b over rows that contain the body (least squares,
+    weighted by row mass), then shift every row by -a * (row - mean_row) pixels (a horizontal shear).
+    A straight but tilted body becomes vertical; local bends (trunk shift, shoulder/hip offsets) stay,
+    because only the best-fit straight line is removed. Motivation: checkpoint_2 notebook 08 found
+    that one signed lean number gives AUC 81 and varies between subject-id blocks of healthy children.
+    """
+
+    def __init__(self, divsor=255.0, cutting=None, min_mass=1.0):
+        self.divsor, self.cutting, self.min_mass = divsor, cutting, min_mass
+
+    def deskew(self, x):
+        x = np.asarray(x, dtype=np.float32)                  # [s, h, w]
+        s, h, w = x.shape
+        cols = np.arange(w, dtype=np.float32)
+        rows = np.arange(h, dtype=np.float32)
+        mass = x.sum(-1)                                     # [s, h]
+        center = (x * cols).sum(-1) / np.maximum(mass, 1e-6)
+        wgt = (mass > self.min_mass * 255.0).astype(np.float32) * mass   # rows with >= min_mass body pixels
+        sw = np.maximum(wgt.sum(-1, keepdims=True), 1e-6)
+        r_mean = (wgt * rows).sum(-1, keepdims=True) / sw
+        c_mean = (wgt * center).sum(-1, keepdims=True) / sw
+        cov = (wgt * (rows - r_mean) * (center - c_mean)).sum(-1, keepdims=True)
+        var = np.maximum((wgt * (rows - r_mean) ** 2).sum(-1, keepdims=True), 1e-6)
+        slope = cov / var                                    # [s, 1] pixels per row
+        shift = np.rint(-slope * (rows[None] - r_mean)).astype(np.int64)   # [s, h]
+        src = cols[None, None, :].astype(np.int64) - shift[..., None]      # gather index
+        valid = (src >= 0) & (src < w)
+        src = np.clip(src, 0, w - 1)
+        out = np.take_along_axis(x, src, axis=-1) * valid
+        return out
+
+    def __call__(self, x):
+        x = self.deskew(x)
+        cutting = self.cutting if self.cutting is not None else int(x.shape[-1] // 64) * 10
+        if cutting != 0:
+            x = x[..., cutting:-cutting]
+        return x / self.divsor

@@ -37,7 +37,7 @@ def initialization(cfgs, training):
 
     msg_mgr.log_info(engine_cfg)
 
-    seed = torch.distributed.get_rank()
+    seed = torch.distributed.get_rank() + int(os.environ.get('OPENGAIT_SEED', 0))  # exp_2: one seed per run
     init_seeds(seed)
 
 

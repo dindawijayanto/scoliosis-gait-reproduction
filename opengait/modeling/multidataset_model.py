@@ -188,7 +188,7 @@ class MultiDatasets(BaseModel):
                 collate_fn=CollateFn(dataset_label_set, sampler_cfg),
                 num_workers=1,
                 pin_memory=True))
-        
+
         if isinstance(data_cfg, list):
             return loader
         return loader[0]
