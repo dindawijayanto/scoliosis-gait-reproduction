@@ -37,7 +37,12 @@ for run in $RUNS; do
   OPENGAIT_SEED=$seed CUDA_VISIBLE_DEVICES=$gpu \
     torchrun --nproc_per_node=1 --master_port=$port opengait/main.py \
       --cfgs "$CFG_DIR/$run.yaml" --phase train --log_to_file > "$LOG_DIR/$run.log" 2>&1 &
-  sleep 20
+  pid=$!
+  sleep 90   # a broken setup crashes within seconds: stop the queue instead of starting the next run
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "$(date '+%F %T') $run stopped in the first 90 s -> queue stopped. Error:"
+    grep -m 3 -E "Error|error:" "$LOG_DIR/$run.log"; exit 1
+  fi
 done
 wait
 echo "$(date '+%F %T') all runs finished"
