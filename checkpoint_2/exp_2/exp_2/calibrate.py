@@ -11,6 +11,10 @@ Rules (ties -> smaller |tau|, smaller lam, later checkpoint):
   fixed      argmax at 16k (or the last checkpoint of a short run), no val use
   val-tau    checkpoint + tau chosen by val balanced accuracy
   val-fuse   checkpoint + tau + lam chosen by val balanced accuracy (= val-tau for runs without a head)
+Beyond accuracy (analysis checkpoint, threshold-free):
+  probes      AUC scoliosis-vs-negative and neutral-vs-negative on the normal, mirrored and deskewed test set
+  curves      val / test balanced accuracy (val tau) and AUC per checkpoint -> results/curves.json
+  embedding   5-NN leave-one-out balanced accuracy on the 256x16 test embeddings (how separable the classes are)
 Usage: python exp_2/calibrate.py   ->  prints per-run and per-variant tables, writes exp_2/results/summary.{json,md}
 """
 import argparse
@@ -97,6 +101,44 @@ def evaluate_run(run_dir):
     return rows
 
 
+def threshold_free(z, y):
+    s = z - z.max(-1, keepdims=True)
+    sc = np.logaddexp(s[:, 1], s[:, 2]) - s[:, 0]
+    return {'AUC_sn': auc(sc[y > 0], sc[y == 0]), 'AUC_nn': auc((s[:, 1] - s[:, 0])[y == 1], (s[:, 1] - s[:, 0])[y == 0])}
+
+
+def beyond_accuracy(run_dir, rows):
+    """Probes, learning curve and embedding separability of one run."""
+    out = {}
+    test = load(run_dir / 'test')
+    it = rows['fixed']['iter']
+    for split in ('test', 'test_mirror', 'test_deskew'):
+        f = run_dir / split / f'iter_{it:05d}.npz'
+        if f.exists():
+            d = np.load(f)
+            out[split] = threshold_free(16 * d['logits'].mean(-1), d['true'])
+    f = run_dir / 'test' / f'iter_{it:05d}.npz'
+    d = np.load(f)
+    if 'embed' in d.files:
+        from sklearn.neighbors import KNeighborsClassifier
+        from sklearn.model_selection import cross_val_predict
+        x = d['embed'].astype(np.float32).reshape(len(d['true']), -1)
+        x /= np.linalg.norm(x, axis=1, keepdims=True) + 1e-8
+        p = cross_val_predict(KNeighborsClassifier(5), x, d['true'], cv=10)
+        out['knn_bal'] = float(np.mean([100 * np.mean(p[d['true'] == c] == c) for c in range(3)]))
+    val = load(run_dir / 'val')
+    curve = []
+    for i in sorted(set(val) & set(test)):
+        zv, av, yv = val[i]
+        t = max(TAUS, key=lambda t: metrics(yv, scores(zv, None, t, 0))['bal'])
+        zt, at, yt = test[i]
+        m = metrics(yt, scores(zt, None, t, 0))
+        curve.append({'iter': i, 'val_bal': metrics(yv, scores(zv, None, t, 0))['bal'], 'test_bal': m['bal'],
+                      'test_rec_neu': m['rec_neu'], 'test_AUC_nn': m['AUC_nn'], 'tau': float(t)})
+    out['curve'] = curve
+    return out
+
+
 def paired_bootstrap(a_rows, b_rows, rule, n=2000, seed=0):
     """Child-level paired bootstrap of the seed-averaged balanced-accuracy gain b - a on test."""
     rng = np.random.default_rng(seed)
@@ -121,7 +163,9 @@ def main():
     by_variant = {}
     for r in runs:
         variant = re.sub(r'_s\d+$', '', r.name)
-        by_variant.setdefault(variant, []).append(evaluate_run(r))
+        rows = evaluate_run(r)
+        rows['_beyond'] = beyond_accuracy(r, rows)
+        by_variant.setdefault(variant, []).append(rows)
 
     lines, summary = [], {}
     for rule in ['fixed', 'val-tau', 'val-fuse']:
@@ -146,12 +190,38 @@ def main():
                 continue
             g, lo, hi = paired_bootstrap(by_variant[a.ref], rows, 'val-fuse')
             lines.append(f'- {v}: {g:+.1f}  [{lo:+.1f}, {hi:+.1f}]')
+
+    lines += ['\n### beyond accuracy (analysis checkpoint, mean over seeds)', '',
+              'AUC_sn = scoliosis vs negative, AUC_nn = neutral vs negative, on the normal / mirrored / deskewed test set.',
+              'A model that reads the image lean drops on mirror; deskew shows what is left without the global lean.', '',
+              '| variant | AUC_sn | AUC_sn mirror | AUC_sn deskew | AUC_nn | AUC_nn mirror | AUC_nn deskew | 5-NN bal (embedding) |',
+              '|---|---|---|---|---|---|---|---|']
+    curves = {}
+    for v, rows in by_variant.items():
+        b = [r['_beyond'] for r in rows]
+        cells = []
+        for k in ('AUC_sn', 'AUC_nn'):
+            for sp in ('test', 'test_mirror', 'test_deskew'):
+                vals = [x[sp][k] for x in b if sp in x]
+                cells.append(f'{np.mean(vals):.1f}' if vals else '-')
+        knn = [x['knn_bal'] for x in b if 'knn_bal' in x]
+        cells.append(f'{np.mean(knn):.1f}' if knn else '-')
+        lines.append(f'| {v} | ' + ' | '.join(cells) + ' |')
+        curves[v] = [x['curve'] for x in b]
+
+    lines += ['\n### learning curve (seed-averaged test balanced accuracy / neutral recall, tau chosen on val per checkpoint)', '']
+    for v, cs in curves.items():
+        n = min(len(c) for c in cs)
+        lines.append(f'- {v}: ' + '  '.join(
+            f'{cs[0][i]["iter"] / 1000:g}k {np.mean([c[i]["test_bal"] for c in cs]):.0f}/{np.mean([c[i]["test_rec_neu"] for c in cs]):.0f}'
+            for i in range(n)))
     text = '\n'.join(lines)
     print(text)
     out = HERE / 'results'
     out.mkdir(exist_ok=True)
     (out / 'summary.md').write_text(text, encoding='utf8')
     json.dump(summary, open(out / 'summary.json', 'w'), indent=1)
+    json.dump(curves, open(out / 'curves.json', 'w'), indent=1)
 
 
 if __name__ == '__main__':

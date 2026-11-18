@@ -160,7 +160,7 @@ class ScoNetRobust(BaseModel):
                 'triplet': {'embeddings': embed, 'labels': pids},
             },
             'visual_summary': {'image/sils': rearrange(sils[:, :1], 'n c s h w -> (n s) c h w')},
-            'inference_feat': {'embeddings': decision},
+            'inference_feat': {'embeddings': decision, 'embed': embed},   # embed [n, 256, p] for analysis
         }
         if aux:
             retval['inference_feat']['aux'] = torch.stack(aux, 1)  # [n, tasks, 2, p]

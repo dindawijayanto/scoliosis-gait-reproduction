@@ -764,3 +764,14 @@ class DeskewSilCuttingTransform():
         if cutting != 0:
             x = x[..., cutting:-cutting]
         return x / self.divsor
+
+
+class MirrorSilCuttingTransform():
+    """Test-time probe (exp_2): left/right mirrored silhouettes, optionally after deskew, then the usual cut.
+    A model that relies on the image lean should collapse on mirrored input (checkpoint_2 notebook 08)."""
+
+    def __init__(self, divsor=255.0, cutting=None, deskew=False):
+        self.base = DeskewSilCuttingTransform(divsor, cutting) if deskew else BaseSilCuttingTransform(divsor, cutting)
+
+    def __call__(self, x):
+        return self.base(x)[..., ::-1].copy()

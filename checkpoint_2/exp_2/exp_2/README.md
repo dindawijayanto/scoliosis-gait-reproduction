@@ -49,8 +49,8 @@ Notes:
 | `opengait/main.py` | `OPENGAIT_SEED` env override (OpenGait otherwise seeds with the rank, always 0 on one GPU) |
 | `exp_2/make_configs.py` | writes the 24 configs (8 variants x 3 seeds) |
 | `exp_2/run_queue.sh` | runs a phase, `JOBS` runs per GPU at the same time, skips finished runs |
-| `exp_2/export_logits.py` | val + test logits (and aux logits) of every checkpoint |
-| `exp_2/calibrate.py` | val-chosen checkpoint / tau / aux weight -> test tables (mean +- std over seeds), AUCs, paired bootstrap vs `A_base` |
+| `exp_2/export_logits.py` | val + test logits of every checkpoint (learning curves), and at 16k also the mirrored test (lean-shortcut probe), the deskewed test (lean-corrected test) and the 256x16 embeddings |
+| `exp_2/calibrate.py` | val-chosen checkpoint / tau / aux weight -> test tables (mean +- std over seeds), AUCs, paired bootstrap vs `A_base`; beyond accuracy: AUC on normal / mirrored / deskewed test, 5-NN separability of the embeddings, learning curves |
 | `exp_2/gradcam/gradcam.ipynb` | Grad-CAM, class-average heatmaps, band shares, left/right vs lean, frame use, deletion and sanity checks |
 
 ## Steps on the lab server
