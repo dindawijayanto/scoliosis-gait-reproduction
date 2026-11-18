@@ -40,7 +40,7 @@ for run in $RUNS; do
       --cfgs "$CFG_DIR/$run.yaml" --phase train --log_to_file > "$LOG_DIR/$run.log" 2>&1 &
   pid=$!
   sleep 90   # a broken setup crashes within seconds: stop the queue instead of starting the next run
-  if ! kill -0 "$pid" 2>/dev/null; then
+  if ! kill -0 "$pid" 2>/dev/null && ! done_already "$run"; then   # gone without its final checkpoint = crash
     echo "$(date '+%F %T') $run stopped in the first 90 s -> queue stopped. Error:"
     grep -m 3 -E "Error|error:" "$LOG_DIR/$run.log"; exit 1
   fi

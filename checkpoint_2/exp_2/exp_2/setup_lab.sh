@@ -12,7 +12,7 @@ echo "== 1/4 GPU"
 nvidia-smi --query-gpu=index,name,memory.total,memory.used --format=csv
 
 echo "== 2/4 Python packages (own venv inside the group folder: the account is shared)"
-if [ -z "${VIRTUAL_ENV:-}" ]; then
+if [ -z "${VIRTUAL_ENV:-}" ] && [ -z "${SKIP_VENV:-}" ]; then   # SKIP_VENV=1 on RunPod: its image already has torch
   VENV=${VENV:-$(pwd)/../../../venv}; [ -d "$VENV" ] || python3 -m venv "$VENV"
   source "$VENV/bin/activate"
   python -c "import torch" 2>/dev/null || pip install -q torch torchvision
