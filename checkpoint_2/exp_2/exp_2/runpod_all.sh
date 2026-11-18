@@ -9,6 +9,8 @@ cd "$(dirname "$0")/.."
 DATA=${DATA:-/workspace/data/Scoliosis1K-sil-pkl}
 RUNS=${RUNS:-"D_la_s0 F_ord_on_D_la_s0 E_bam_on_D_la_s0 G_deskew_on_D_la_s0"}
 GPUS=${GPUS:-$(nvidia-smi --query-gpu=index --format=csv,noheader | tr '\n' ' ')}
+JOBS_PER_GPU=${JOBS_PER_GPU:-1}   # 2 on a 48 GB GPU (A40): one run needs ~10 GB
+WORKERS=${WORKERS:-4}             # data workers per run (cache is on, so few are enough)
 log() { echo "$(date '+%F %T') == $*"; }
 
 log "1/5 setup"
@@ -32,6 +34,8 @@ rm -rf exp_2/logs exp_2/logits exp_2/results output/Scoliosis1K/ScoNetRobust
 python exp_2/make_configs.py --data "$DATA" --iters 100 > /dev/null
 sed -i "s/num_workers: 8/num_workers: $WORKERS/" exp_2/configs/*.yaml
 GPUS="$GPUS" JOBS=2 bash exp_2/run_queue.sh $RUNS
+JOBS_PER_GPU=${JOBS_PER_GPU:-1}   # 2 on a 48 GB GPU (A40): one run needs ~10 GB
+WORKERS=${WORKERS:-4}             # data workers per run (cache is on, so few are enough)
 export_parallel ""
 python exp_2/calibrate.py > /workspace/smoke_summary.md
 grep -c "^| " /workspace/smoke_summary.md > /dev/null && log "smoke test passed (table in /workspace/smoke_summary.md)"
@@ -41,6 +45,8 @@ rm -rf exp_2/logs exp_2/logits exp_2/results output/Scoliosis1K/ScoNetRobust
 python exp_2/make_configs.py --data "$DATA" > /dev/null
 sed -i "s/total_iter: 20000/total_iter: 16000/; s/num_workers: 8/num_workers: $WORKERS/" exp_2/configs/*.yaml
 GPUS="$GPUS" JOBS=$JOBS_PER_GPU bash exp_2/run_queue.sh $RUNS
+JOBS_PER_GPU=${JOBS_PER_GPU:-1}   # 2 on a 48 GB GPU (A40): one run needs ~10 GB
+WORKERS=${WORKERS:-4}             # data workers per run (cache is on, so few are enough)
 
 log "4/5 export (all checkpoints + mirror / deskew probes + embeddings) and calibrate"
 export_parallel ""
