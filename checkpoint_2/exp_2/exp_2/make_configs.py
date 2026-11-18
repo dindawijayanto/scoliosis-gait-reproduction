@@ -32,8 +32,14 @@ VARIANTS = {
     'E_bam':    {'aux_head': 'bam'},
     'F_ord':    {'aux_head': 'ordinal'},
     'G_deskew': {'transform': 'DeskewSilCuttingTransform'},
+    # phase 2b: the other checkpoint_2 notebook ideas, checked at full scale
+    'H_tattn':  {'model': {'temporal': 'attention'}},          # notebook 04: gated frame attention
+    'I_strip':  {'model': {'strip_weights': 'dynamic'}},       # notebook 03: learned per-child strip weights
+    'J_ctri':   {'model': {'class_triplet': True}},            # notebook 07: triplet with class as identity
+    'K_gei':    {'model': {'gei_channel': True}},              # notebook 05: ScoliGaitX GEI-subtract, early fusion
+    'L_flip':   {'model': {'train_flip': True}},               # notebook 07/08: flip (expected to hurt)
 }
-PHASE2 = ['E_bam', 'F_ord', 'G_deskew']
+PHASE2 = ['E_bam', 'F_ord', 'G_deskew', 'H_tattn', 'I_strip', 'J_ctri', 'K_gei', 'L_flip']
 
 
 def build(author, variant, run, base, data_root, partition, iters=20000):
@@ -44,6 +50,9 @@ def build(author, variant, run, base, data_root, partition, iters=20000):
     cfg['data_cfg'].update(dataset_root=data_root, dataset_partition=partition, num_workers=8, cache=True)
     cfg['model_cfg']['model'] = 'ScoNetRobust'
     cfg['model_cfg']['aux_head'] = spec.get('aux_head', 'none')
+    cfg['model_cfg'].update(spec.get('model', {}))
+    if cfg['model_cfg'].get('gei_channel'):
+        cfg['model_cfg']['backbone_cfg']['in_channel'] = 2
 
     ce = {'loss_term_weight': 1.0, 'scale': 16, 'tau': spec['tau'], 'type': 'LogitAdjustedCE',
           'log_prefix': 'softmax', 'log_accuracy': True}
@@ -51,6 +60,10 @@ def build(author, variant, run, base, data_root, partition, iters=20000):
     aux_names = {'none': [], 'bam': ['bam'], 'ordinal': ['ord1', 'ord2']}[cfg['model_cfg']['aux_head']]
     for a in aux_names:                                     # aux heads: same loss, own binary prior
         losses.append(dict(ce, log_prefix=a, loss_term_weight=1.0 / len(aux_names), log_accuracy=False))
+    if cfg['model_cfg'].get('strip_weights', 'none') != 'none':        # the strip-weighted decision gets its own CE
+        losses.append(dict(ce, log_prefix='strip', log_accuracy=False))
+    if cfg['model_cfg'].get('class_triplet'):
+        losses.append({'loss_term_weight': 1.0, 'margin': 0.2, 'type': 'ClassTripletLoss', 'log_prefix': 'class_triplet'})
     cfg['loss_cfg'] = losses
 
     sampler = dict(spec['sampler'], batch_shuffle=True, batch_size=[8, 8], frames_num_fixed=30,

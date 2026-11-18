@@ -2,7 +2,7 @@
 # Train a list of exp_2 runs, JOBS at a time per GPU, skipping runs that already reached 20000 iterations.
 # Run from the OpenGait repo root, inside tmux:
 #   bash exp_2/run_queue.sh phase1                 # A, B, C, C_sqrt, D x 3 seeds (15 runs)
-#   bash exp_2/run_queue.sh phase2                 # E, F, G on the --base used in make_configs (9 runs)
+#   bash exp_2/run_queue.sh phase2                 # E ... L on the --base used in make_configs
 #   bash exp_2/run_queue.sh A_base_s0 D_la_s1      # or any config names
 # Env (required on the shared lab server): GPUS="0" = which GPU(s) to use, check nvidia-smi for free ones first;
 #      JOBS=3 = parallel runs per GPU (ScoNet needs ~4-6 GB each)
@@ -15,7 +15,7 @@ JOBS=${JOBS:-3}
 
 case "${1:-}" in
   phase1) RUNS=$(ls $CFG_DIR | sed 's/\.yaml$//' | grep -E '^(A_base|B_strat|C_up|C_sqrt|D_la)_s[0-9]$') ;;
-  phase2) RUNS=$(ls $CFG_DIR | sed 's/\.yaml$//' | grep -E '^(E_bam|F_ord|G_deskew)_on_') ;;
+  phase2) RUNS=$(ls $CFG_DIR | sed 's/\.yaml$//' | grep -E '^(E_bam|F_ord|G_deskew|H_tattn|I_strip|J_ctri|K_gei|L_flip)_on_') ;;
   "") echo "usage: bash exp_2/run_queue.sh phase1|phase2|<run names>"; exit 1 ;;
   *) RUNS="$*" ;;
 esac

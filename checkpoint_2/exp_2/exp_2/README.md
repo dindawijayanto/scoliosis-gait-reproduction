@@ -5,6 +5,7 @@ This experiment answers three questions with full 20k-iteration training, 3 seed
 1. Which way of fixing the 1:1:8 imbalance works at full scale: stratified batches, upsampling, or the logit-adjusted (LA) loss? (phase 1)
 2. Does a neutral head (TG-MILNet's BAM) or an ordinal head add anything on top of that? (phase 2)
 3. How much is left when the global silhouette lean from notebook 08 is removed from the input? (phase 2, `G_deskew`)
+4. Do the checkpoint_2 notebook ideas that gave nothing on mini data (frame attention, strip weights, class triplet, GEI-subtract, flip) also give nothing at full scale? (phase 2, `H`-`L`). Optical flow is left out: on 64 x 44 silhouettes it was mostly interpolation (notebook 05), and computing it for 1493 x 300 frames costs more than one run.
 
 It extends `exp_1/val_calibration`, which was never run: variant `A_base` *is* the exp_1 run (author config, reduced train split), so exp_1 does not need its own run any more.
 
@@ -22,6 +23,11 @@ All variants use the same author config (SGD 0.1, 20k iterations, batch 8 childr
 | `E_bam_on_<base>` | as `<base>` | as `<base>` | BAM: neutral vs rest | - |
 | `F_ord_on_<base>` | as `<base>` | as `<base>` | ordinal: y >= neutral, y >= positive | - |
 | `G_deskew_on_<base>` | as `<base>` | as `<base>` | - | global lean removed |
+| `H_tattn_on_<base>` | as `<base>` | as `<base>` | gated frame attention instead of max over frames (nb 04) | - |
+| `I_strip_on_<base>` | as `<base>` | + CE on the weighted decision | learned per-child strip weights (nb 03) | - |
+| `J_ctri_on_<base>` | as `<base>` | + class triplet (nb 07) | - | - |
+| `K_gei_on_<base>` | as `<base>` | as `<base>` | - | 2nd channel = frame - sequence mean (ScoliGaitX GEI-subtract, nb 05) |
+| `L_flip_on_<base>` | as `<base>` | as `<base>` | - | random horizontal flip in training (nb 07/08, expected to hurt) |
 
 `<base>` is `D_la` by default; after phase 1 you can regenerate the configs on the winner with `--base`.
 
