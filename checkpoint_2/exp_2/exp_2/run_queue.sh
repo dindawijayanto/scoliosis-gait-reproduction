@@ -20,15 +20,16 @@ case "${1:-}" in
   *) RUNS="$*" ;;
 esac
 
-done_already() {   # final checkpoint exists?
-  ls output/Scoliosis1K/ScoNetRobust/"$1"/checkpoints/"$1"-20000.pt >/dev/null 2>&1
+done_already() {   # final checkpoint (total_iter of its config) exists?
+  local it; it=$(grep -m1 "total_iter:" "$CFG_DIR/$1.yaml" | awk '{print $2}')
+  ls output/Scoliosis1K/ScoNetRobust/"$1"/checkpoints/"$1"-$(printf %05d "$it").pt >/dev/null 2>&1
 }
 
 slots=(); for g in $GPUS; do for j in $(seq 1 "$JOBS"); do slots+=("$g"); done; done
 echo "runs: $(echo $RUNS | wc -w) | GPUs: $GPUS | parallel slots: ${#slots[@]}"
 port=29600; i=0; pids=()
 for run in $RUNS; do
-  if done_already "$run"; then echo "skip $run (20000 done)"; continue; fi
+  if done_already "$run"; then echo "skip $run (already finished)"; continue; fi
   seed=${run##*_s}
   # wait for a free slot
   while [ "$(jobs -rp | wc -l)" -ge "${#slots[@]}" ]; do sleep 30; done

@@ -36,7 +36,7 @@ VARIANTS = {
 PHASE2 = ['E_bam', 'F_ord', 'G_deskew']
 
 
-def build(author, variant, run, base, data_root, partition):
+def build(author, variant, run, base, data_root, partition, iters=20000):
     cfg = copy.deepcopy(author)
     v = VARIANTS[variant]
     spec = dict(VARIANTS[base], **v) if variant in PHASE2 else v
@@ -60,7 +60,11 @@ def build(author, variant, run, base, data_root, partition):
     cfg['trainer_cfg']['transform'] = [tr]
     cfg['evaluator_cfg']['transform'] = [dict(tr)]
     cfg['evaluator_cfg']['sampler']['batch_size'] = 1       # = number of GPUs per run
-    cfg['trainer_cfg'].update(save_iter=2000, save_name=run, find_unused_parameters=False)
+    # short protocol: same schedule shape as the author's (lr drops at 50/70/90% of training)
+    cfg['trainer_cfg'].update(total_iter=iters, save_iter=2000 if iters == 20000 else iters // 2,
+                              save_name=run, find_unused_parameters=False)
+    cfg['scheduler_cfg']['milestones'] = [int(iters * f) for f in (0.5, 0.7, 0.9)]
+    cfg['evaluator_cfg']['restore_hint'] = iters
     cfg['evaluator_cfg']['save_name'] = run
     return cfg
 
@@ -69,6 +73,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--data', required=True, help='folder with the 1493 subject folders of Scoliosis1K-sil-pkl')
     ap.add_argument('--base', default='D_la', help='imbalance variant that phase 2 builds on')
+    ap.add_argument('--iters', type=int, default=20000, help='total iterations (author: 20000); milestones scale with it')
     a = ap.parse_args()
     assert a.base in VARIANTS and a.base not in PHASE2
     author = yaml.safe_load(open(AUTHOR_CFG))
@@ -78,7 +83,7 @@ def main():
     for name, v in VARIANTS.items():
         for s in SEEDS:
             run = f'{name}_s{s}' if name not in PHASE2 else f'{name}_on_{a.base}_s{s}'
-            cfg = build(author, name, run, a.base, a.data, partition)
+            cfg = build(author, name, run, a.base, a.data, partition, a.iters)
             yaml.safe_dump(cfg, open(out / f'{run}.yaml', 'w'), sort_keys=False)
     print(f'wrote {len(list(out.glob("*.yaml")))} configs to {out}')
 

@@ -8,7 +8,7 @@ Aux fusion (only runs with a head), weight lam chosen on val:
   bam     : z_neu += lam * 16 * mean(b_neu - b_rest)
   ordinal : z     += lam * log P_ord(y), P_ord from the two cumulative heads
 Rules (ties -> smaller |tau|, smaller lam, later checkpoint):
-  fixed16k   argmax at 16k, no val use (paper protocol)
+  fixed      argmax at 16k (or the last checkpoint of a short run), no val use
   val-tau    checkpoint + tau chosen by val balanced accuracy
   val-fuse   checkpoint + tau + lam chosen by val balanced accuracy (= val-tau for runs without a head)
 Usage: python exp_2/calibrate.py   ->  prints per-run and per-variant tables, writes exp_2/results/summary.{json,md}
@@ -84,9 +84,9 @@ def choose(val, lams):
 def evaluate_run(run_dir):
     val, test = load(run_dir / 'val'), load(run_dir / 'test')
     rows = {}
-    if 16000 in test:
-        z, aux, y = test[16000]
-        rows['fixed16k'] = dict(iter=16000, tau=0.0, lam=0.0, **metrics(y, scores(z, aux, 0, 0)))
+    last = 16000 if 16000 in test else max(test)          # paper protocol, or the last checkpoint of a short run
+    z, aux, y = test[last]
+    rows['fixed'] = dict(iter=last, tau=0.0, lam=0.0, **metrics(y, scores(z, aux, 0, 0)))
     for rule, lams in [('val-tau', [0.0]), ('val-fuse', LAMS)]:
         it, t, lam, vb = choose(val, lams)
         z, aux, y = test[it]
@@ -124,7 +124,7 @@ def main():
         by_variant.setdefault(variant, []).append(evaluate_run(r))
 
     lines, summary = [], {}
-    for rule in ['fixed16k', 'val-tau', 'val-fuse']:
+    for rule in ['fixed', 'val-tau', 'val-fuse']:
         lines += [f'\n### {rule} (test, mean +- std over seeds)', '',
                   '| variant | n | ' + ' | '.join(KEYS) + ' | tau | lam | iter (k) |',
                   '|---' * (len(KEYS) + 5) + '|']
@@ -134,7 +134,7 @@ def main():
                 continue
             cells = [f'{np.mean([m[k] for m in ms]):.1f} +- {np.std([m[k] for m in ms]):.1f}' for k in KEYS]
             extra = [', '.join(f'{m[k] + 0:g}' for m in ms) for k in ('tau', 'lam')] + \
-                    [', '.join(str(m['iter'] // 1000) for m in ms)]
+                    [', '.join(f"{m['iter'] / 1000:g}" for m in ms)]
             lines.append(f'| {v} | {len(ms)} | ' + ' | '.join(cells + extra) + ' |')
             summary.setdefault(rule, {})[v] = {k: [m[k] for m in ms] for k in KEYS + ['tau', 'lam', 'iter']}
     lines.append('\nTG-MILNet (paper, 1 run, full train set): acc 89.9  Sen 99.5  Spe 86.4  neu 70.6  pos 91.2')
