@@ -18,7 +18,7 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
   python -c "import torch" 2>/dev/null || pip install -q torch torchvision
 fi
 python -c "import torch; print('torch', torch.__version__, '| cuda', torch.cuda.is_available(), '| gpus', torch.cuda.device_count())"
-pip install -q tqdm pyyaml tensorboard opencv-python-headless kornia einops scikit-learn scipy matplotlib
+pip install -q tqdm pyyaml tensorboard opencv-python-headless kornia einops scikit-learn scipy matplotlib imageio fvcore lightly transformers pillow  # OpenGait imports every model at start
 
 echo "== 3/4 Data"
 n=$(find "$DATA" -name '*.pkl' 2>/dev/null | wc -l)
@@ -39,7 +39,7 @@ cat <<MSG
 Setup done. Every new shell: source $VENV/bin/activate
 Inside tmux (so training survives a closed ssh session):
   tmux new -s exp2
-  GPUS=0 JOBS=3 bash exp_2/run_queue.sh phase1   # pick a free GPU from nvidia-smi; JOBS = runs per GPU
+  GPUS=0 JOBS=1 bash exp_2/run_queue.sh phase1   # pick a free GPU from nvidia-smi; JOBS = runs per GPU (12 GB -> 1)
 Watch: tail -f exp_2/logs/<run>.log   |   nvidia-smi
 After phase 1: python exp_2/export_logits.py && python exp_2/calibrate.py
 Then phase 2 on the best imbalance fix, e.g.:
