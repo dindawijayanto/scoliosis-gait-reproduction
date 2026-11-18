@@ -30,6 +30,7 @@ export_parallel() {   # one export per GPU at a time
 log "2/5 smoke test: every run 100 iterations, all at once"
 rm -rf exp_2/logs exp_2/logits exp_2/results output/Scoliosis1K/ScoNetRobust
 python exp_2/make_configs.py --data "$DATA" --iters 100 > /dev/null
+sed -i "s/num_workers: 8/num_workers: $WORKERS/" exp_2/configs/*.yaml
 GPUS="$GPUS" JOBS=2 bash exp_2/run_queue.sh $RUNS
 export_parallel ""
 python exp_2/calibrate.py > /workspace/smoke_summary.md
@@ -38,8 +39,8 @@ grep -c "^| " /workspace/smoke_summary.md > /dev/null && log "smoke test passed 
 log "3/5 full runs: 16000 iterations (= the 16k checkpoint of the author's 20k schedule)"
 rm -rf exp_2/logs exp_2/logits exp_2/results output/Scoliosis1K/ScoNetRobust
 python exp_2/make_configs.py --data "$DATA" > /dev/null
-sed -i 's/total_iter: 20000/total_iter: 16000/' exp_2/configs/*.yaml
-GPUS="$GPUS" JOBS=1 bash exp_2/run_queue.sh $RUNS
+sed -i "s/total_iter: 20000/total_iter: 16000/; s/num_workers: 8/num_workers: $WORKERS/" exp_2/configs/*.yaml
+GPUS="$GPUS" JOBS=$JOBS_PER_GPU bash exp_2/run_queue.sh $RUNS
 
 log "4/5 export (all checkpoints + mirror / deskew probes + embeddings) and calibrate"
 export_parallel ""
