@@ -1,0 +1,3 @@
+# raw training output: logits, train logs, downloads from lab / Kaggle / RunPod (~1 GB)
+runs/
+analysis/gradcam/output/cache/

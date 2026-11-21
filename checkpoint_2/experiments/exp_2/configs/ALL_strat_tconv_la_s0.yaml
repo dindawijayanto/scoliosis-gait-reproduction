@@ -1,0 +1,105 @@
+# exp_2 phase 4 (2026-11-21): ALL = stratified sampler + ordered clips + temporal conv + LA loss on the
+# train-set prior (la_prior: data, tau 1) from scratch, 16k; post-hoc tau is chosen on val as for every run.
+data_cfg:
+  dataset_name: Scoliosis1K
+  dataset_root: /kaggle/input/datasets/dindawijayanto/scoliosis-1k/Scoliosis1K-sil-pkl
+  dataset_partition: ./checkpoint_2/experiments/exp_2/partitions/Scoliosis1K_118_trainval.json
+  num_workers: 2
+  remove_no_gallery: false
+  test_dataset_name: Scoliosis1K
+  cache: true
+evaluator_cfg:
+  enable_float16: true
+  restore_ckpt_strict: true
+  restore_hint: 16000
+  save_name: ALL_strat_tconv_la_s0
+  eval_func: evaluate_scoliosis
+  sampler:
+    batch_shuffle: false
+    batch_size: 1
+    sample_type: all_ordered
+    frames_all_limit: 720
+  metric: euc
+  transform:
+  - type: BaseSilCuttingTransform
+loss_cfg:
+- loss_term_weight: 1.0
+  margin: 0.2
+  type: TripletLoss
+  log_prefix: triplet
+- loss_term_weight: 1.0
+  scale: 16
+  tau: 1.0
+  type: LogitAdjustedCE
+  log_prefix: softmax
+  log_accuracy: true
+model_cfg:
+  model: ScoNetRobust
+  backbone_cfg:
+    type: ResNet9
+    block: BasicBlock
+    channels:
+    - 64
+    - 128
+    - 256
+    - 512
+    layers:
+    - 1
+    - 1
+    - 1
+    - 1
+    strides:
+    - 1
+    - 2
+    - 2
+    - 1
+    maxpool: false
+  SeparateFCs:
+    in_channels: 512
+    out_channels: 256
+    parts_num: 16
+  SeparateBNNecks:
+    class_num: 3
+    in_channels: 256
+    parts_num: 16
+  bin_num:
+  - 16
+  aux_head: none
+  temporal: tconv
+  la_prior: data
+optimizer_cfg:
+  lr: 0.1
+  momentum: 0.9
+  solver: SGD
+  weight_decay: 0.0005
+scheduler_cfg:
+  gamma: 0.1
+  milestones:
+  - 10000
+  - 14000
+  - 18000
+  scheduler: MultiStepLR
+trainer_cfg:
+  enable_float16: true
+  fix_BN: false
+  with_test: false
+  log_iter: 100
+  restore_ckpt_strict: true
+  restore_hint: 0
+  save_iter: 2000
+  save_name: ALL_strat_tconv_la_s0
+  sync_BN: true
+  total_iter: 16000
+  sampler:
+    type: ClassAwareSampler
+    mode: stratified
+    batch_shuffle: true
+    batch_size:
+    - 8
+    - 8
+    frames_num_fixed: 30
+    sample_type: fixed_ordered
+    frames_skip_num: 0
+  transform:
+  - type: BaseSilCuttingTransform
+  find_unused_parameters: false

@@ -11,20 +11,151 @@ from ..modules import SetBlockWrapper, HorizontalPoolingPyramid, PackSequenceWra
 CLASS_ORDER = ['negative', 'neutral', 'positive']
 
 
+class GatedAttention(nn.Module):
+    """Per-strip gated attention over frames (checkpoint_2 notebook 04). Starts as a plain mean over frames."""
+
+    def __init__(self, c=512, hidden=128):
+        super().__init__()
+        self.V = nn.Linear(c, hidden)
+        self.U = nn.Linear(c, hidden)
+        self.w = nn.Linear(hidden, 1)
+
+    def zero_init(self):
+        nn.init.zeros_(self.w.weight)
+        nn.init.zeros_(self.w.bias)
+
+    def forward(self, h):                                   # h [n, s, c, p]
+        x = h.permute(0, 1, 3, 2).float()                   # [n, s, p, c]
+        e = self.w(torch.tanh(self.V(x)) * torch.sigmoid(self.U(x))).squeeze(-1)   # [n, s, p]
+        alpha = torch.softmax(e, dim=1)
+        return (alpha.unsqueeze(2) * h.float()).sum(1), alpha                       # [n, c, p]
+
+
+class TemporalConv(nn.Module):
+    """Order-aware frame model (exp_2 T_tconv): residual dilated temporal convolutions over the ORDERED frames,
+    applied per strip on [n, c, s, p] before the max over frames. Each block is
+    x + PW(GELU(BN(DW_t(x)))) with a depthwise conv along time (kernel k, dilation d) and a pointwise 1x1 conv.
+    The pointwise convs start at zero, so at init the module is the identity and the model is HPP-then-max ScoNet.
+    Receptive field with k=5 and dilations (1, 2, 4): 1 + 4 * (1 + 2 + 4) = 29 frames, about one 30-frame clip."""
+
+    def __init__(self, c=512, k=5, dilations=(1, 2, 4)):
+        super().__init__()
+        self.blocks = nn.ModuleList()
+        for d in dilations:
+            self.blocks.append(nn.Sequential(
+                nn.Conv2d(c, c, (k, 1), padding=(d * (k // 2), 0), dilation=(d, 1), groups=c, bias=False),
+                nn.BatchNorm2d(c), nn.GELU(), nn.Conv2d(c, c, 1)))
+
+    def zero_init(self):
+        for b in self.blocks:
+            nn.init.zeros_(b[3].weight)
+            nn.init.zeros_(b[3].bias)
+
+    def forward(self, h):                                   # h [n, c, s, p], frames in time order
+        for b in self.blocks:
+            h = h + b(h)
+        return h
+
+
+def posture_features(sils, bands=8, eps=1e-6):
+    """Per-frame posture pattern from the silhouettes, mirror-invariant by construction (exp_2 T_pose).
+
+    sils [n, s, h, w] in [0, 1]. For each frame: the body centre of every row, a weighted straight-line fit
+    (the global axis = the global lean, which is thrown away), then per horizontal band
+      - |shift| of the band centre from that axis       (shoulder / waist / hip offset, a local bend)
+      - |left - right| / (left + right) mass about it   (one side fuller than the other)
+    -> [n, s, 2 * bands]. Absolute values: a scoliotic bend to the left or to the right gives the same
+    number, and mirroring the video gives the same features, so this stream cannot learn the side of the lean."""
+    n, s, h, w = sils.shape
+    x = sils.float()
+    cols = torch.arange(w, device=x.device, dtype=x.dtype)
+    rows = torch.arange(h, device=x.device, dtype=x.dtype)
+    mass = x.sum(-1)                                                  # [n, s, h]
+    centre = (x * cols).sum(-1) / (mass + eps)
+    wgt = mass * (mass > 1.0)
+    sw = wgt.sum(-1, keepdim=True) + eps
+    r_mean = (wgt * rows).sum(-1, keepdim=True) / sw
+    c_mean = (wgt * centre).sum(-1, keepdim=True) / sw
+    slope = (wgt * (rows - r_mean) * (centre - c_mean)).sum(-1, keepdim=True) / \
+        ((wgt * (rows - r_mean) ** 2).sum(-1, keepdim=True) + eps)
+    axis = c_mean + slope * (rows - r_mean)                           # [n, s, h] global axis per row
+    resid = centre - axis
+    left = (x * (axis.unsqueeze(-1) - cols + 0.5).clamp(0, 1)).sum(-1)   # soft split: exactly mirror-symmetric
+    right = mass - left
+    wb = wgt.view(n, s, bands, h // bands)
+    shift = ((resid * wgt).view(n, s, bands, -1).sum(-1) / (wb.sum(-1) + eps)).abs()
+    lr = ((left - right).view(n, s, bands, -1).sum(-1) / (mass.view(n, s, bands, -1).sum(-1) + eps)).abs()
+    return torch.cat([shift, lr], -1)                                 # [n, s, 2 * bands]
+
+
+class PostureStream(nn.Module):
+    """Temporal conv over the ordered posture features -> a 3-class logit offset added to every strip.
+    The last layer starts at zero, so at init the model is unchanged. The offset goes through tanh, so it stays in
+    [-1, 1] like the cosine logits of the BNNecks (unbounded, it blew the loss up at lr 0.1 from scratch)."""
+
+    def __init__(self, bands=8, hidden=64, classes=3):
+        super().__init__()
+        self.bands = bands
+        f = 2 * bands
+        self.net = nn.Sequential(
+            nn.BatchNorm1d(f),
+            nn.Conv1d(f, hidden, 5, padding=2), nn.GELU(),
+            nn.Conv1d(hidden, hidden, 5, padding=4, dilation=2), nn.GELU(),
+            nn.Conv1d(hidden, hidden, 5, padding=8, dilation=4), nn.GELU())
+        self.head = nn.Linear(hidden, classes)
+
+    def zero_init(self):
+        nn.init.zeros_(self.head.weight)
+        nn.init.zeros_(self.head.bias)
+
+    def forward(self, sils):                                          # sils [n, 1, s, h, w]
+        with torch.autocast('cuda', enabled=False):
+            f = posture_features(sils[:, 0], self.bands)              # [n, s, 16]
+            z = self.net(f.transpose(1, 2)).max(-1)[0]                # [n, hidden], max over time
+            return torch.tanh(self.head(z))                           # [n, 3], bounded like the cosine logits
+
+
+class DynamicStripWeights(nn.Module):
+    """Per-child, per-class weights over the 16 strips (checkpoint_2 notebook 03). Starts as the ScoNet mean."""
+
+    def __init__(self, embed_dim=256, classes=3, hidden=64):
+        super().__init__()
+        self.score = nn.Sequential(nn.Linear(embed_dim, hidden), nn.Tanh(), nn.Linear(hidden, classes))
+
+    def zero_init(self):
+        nn.init.zeros_(self.score[2].weight)
+        nn.init.zeros_(self.score[2].bias)
+
+    def forward(self, embed, logits):                       # embed [n, c, p], logits [n, 3, p]
+        a = self.score(embed.permute(0, 2, 1).float())      # [n, p, 3]
+        w = torch.softmax(a.permute(0, 2, 1), dim=-1)       # [n, 3, p], softmax over strips
+        return (logits.float() * w).sum(-1, keepdim=True)   # [n, 3, 1]
+
+
 class ScoNetRobust(BaseModel):
     """ScoNet-MT (ResNet9 + max over frames + 16 strips + triplet & CE) with optional parts for exp_2.
+    Every option off = exactly ScoNet-MT.
 
     model_cfg keys on top of ScoNet's:
       aux_head: none | bam | ordinal
-        bam     : one binary head "neutral vs rest" (TG-MILNet's BAM, here with the LA loss).
-        ordinal : two binary heads "y >= neutral" and "y >= positive" (negative < neutral < positive).
-                  The neutral/negative border then gets gradient from every scoliosis child.
-      Every head is a SeparateBNNecks on the same 16-strip embedding as the main head.
-
-    Losses read their class prior from the training sampler (ClassAwareSampler.class_prior, or the
-    natural class frequencies for TripletSampler), so the LA loss knows what the batches look like.
-    inference_feat: 'embeddings' = main logits [n, 3, p] (OpenGait's evaluator uses only these),
-                    'aux' = auxiliary logits [n, tasks, 2, p] (exported for val-chosen fusion).
+        bam     : binary head "neutral vs rest" (TG-MILNet's BAM, here with the LA loss)
+        ordinal : two binary heads "y >= neutral" and "y >= positive" (negative < neutral < positive)
+      temporal: max | attention | tconv | hpp_max
+                                      frame pooling; attention = gated attention per strip (notebook 04);
+                                      tconv = order-aware temporal conv per strip, then max (needs ordered frames);
+                                      hpp_max = per-frame HPP then max, i.e. tconv without the conv (its control)
+      posture_stream: false | true    exp_2 T_pose: temporal conv over per-frame shoulder / waist / hip offsets from
+                                      the body axis (global lean removed, absolute = mirror-invariant), added to logits
+      la_prior: sampler | data        prior used by the LA loss (see build_network)
+      strip_weights: none | dynamic   learned per-child strip weights for the decision (notebook 03)
+      gei_channel: false | true       2nd input channel = frame - mean of its sequence (ScoliGaitX GEI-subtract,
+                                      early fusion as in notebook 05; needs backbone_cfg.in_channel = 2)
+      train_flip: false | true        random horizontal flip of whole training sequences (notebook 07)
+      class_triplet: false | true     extra triplet loss with the CLASS as identity (notebook 07)
+    Losses read their class prior from the training sampler, so the LA loss knows what the batches look like.
+    inference_feat: 'embeddings' = decision logits [n, 3, p] (OpenGait's evaluator and calibrate.py average
+                    over p; with strip weights p = 1 and the weighted logits are used),
+                    'aux' = auxiliary logits [n, tasks, 2, p] for val-chosen fusion.
     """
 
     def build_network(self, model_cfg):
@@ -38,12 +169,40 @@ class ScoNetRobust(BaseModel):
         n_tasks = {'none': 0, 'bam': 1, 'ordinal': 2}[self.aux_type]
         neck = dict(model_cfg['SeparateBNNecks'], class_num=2)
         self.AuxNecks = nn.ModuleList([SeparateBNNecks(**neck) for _ in range(n_tasks)])
+
+        self.temporal = model_cfg.get('temporal', 'max')
+        assert self.temporal in ('max', 'attention', 'tconv', 'hpp_max')
+        if self.temporal == 'attention':
+            self.FrameAttention = GatedAttention(c=model_cfg['SeparateFCs']['in_channels'])
+        if self.temporal == 'tconv':
+            self.TemporalConv = TemporalConv(c=model_cfg['SeparateFCs']['in_channels'])
+        # which class prior the LA loss corrects for: 'sampler' = what the batches look like (uniform for a stratified
+        # sampler, so LA == CE there); 'data' = the train-set class distribution (80/10/10), so LA stays active
+        # even with balanced batches (exp_2 ALL run: stratified + LA on top of each other)
+        self.la_prior = model_cfg.get('la_prior', 'sampler')
+        assert self.la_prior in ('sampler', 'data')
+        self.posture = model_cfg.get('posture_stream', False)
+        if self.posture:
+            self.PostureStream = PostureStream()
+        self.strip_mode = model_cfg.get('strip_weights', 'none')
+        assert self.strip_mode in ('none', 'dynamic')
+        if self.strip_mode == 'dynamic':
+            self.StripWeights = DynamicStripWeights(embed_dim=model_cfg['SeparateFCs']['out_channels'])
+        self.gei_channel = model_cfg.get('gei_channel', False)
+        self.train_flip = model_cfg.get('train_flip', False)
+        self.class_triplet = model_cfg.get('class_triplet', False)
         self._log_priors = None
+
+    def init_parameters(self):
+        super().init_parameters()
+        for name in ('FrameAttention', 'StripWeights', 'TemporalConv', 'PostureStream'):   # new modules start as plain ScoNet
+            if hasattr(self, name):
+                getattr(self, name).zero_init()
 
     # ---- class priors seen by the losses -------------------------------------------------
     def _class_prior(self):
         sampler = self.train_loader.batch_sampler
-        if hasattr(sampler, 'class_prior'):
+        if hasattr(sampler, 'class_prior') and self.la_prior == 'sampler':
             return list(sampler.class_prior)
         ds = self.train_loader.dataset             # TripletSampler: uniform over children
         counts = [0, 0, 0]
@@ -61,6 +220,23 @@ class ScoNetRobust(BaseModel):
         return self._log_priors
 
     # ---- forward ---------------------------------------------------------------------------
+    def _pool_frames(self, outs, seqL):
+        """outs [n, c, s, h, w] -> strip features [n, c, p]"""
+        if self.temporal == 'max':
+            return self.HPP(self.TP(outs, seqL, options={"dim": 2})[0])
+        if seqL is not None and len(seqL[0]) > 1:
+            raise ValueError('frame attention / tconv need one sequence per batch at test time (evaluator batch_size 1)')
+        n, c, s = outs.shape[:3]
+        h = self.HPP(rearrange(outs, 'n c s h w -> (n s) c h w'))          # [(n s), c, p]
+        if self.temporal in ('tconv', 'hpp_max'):                           # hpp_max = the same path without the conv (control)
+            h = rearrange(h, '(n s) c p -> n c s p', n=n, s=s)
+            if self.temporal == 'tconv':
+                h = self.TemporalConv(h)
+            return h.max(2)[0]                                              # [n, c, p]
+        h = rearrange(h, '(n s) c p -> n s c p', n=n, s=s)
+        pooled, _ = self.FrameAttention(h)
+        return pooled.to(outs.dtype)
+
     def forward(self, inputs):
         ipts, pids, labels, _, seqL = inputs
         label_ids = torch.from_numpy(np.array([CLASS_ORDER.index(s.lower()) for s in labels])).cuda().long()
@@ -71,20 +247,27 @@ class ScoNetRobust(BaseModel):
         else:
             sils = rearrange(sils, 'n s c h w -> n c s h w')
         del ipts
+        if self.training and self.train_flip:                               # whole sequence, 50%
+            mirror = torch.rand(sils.shape[0], device=sils.device) < 0.5
+            sils = torch.where(mirror.view(-1, 1, 1, 1, 1), sils.flip(-1), sils)
+        if self.gei_channel:                                                # frame - mean of its own sequence
+            sils = torch.cat([sils, sils - sils.mean(2, keepdim=True)], 1)  # [n, 2, s, h, w]
 
         outs = self.Backbone(sils)                                # [n, c, s, h, w]
-        outs = self.TP(outs, seqL, options={"dim": 2})[0]         # [n, c, h, w]
-        feat = self.HPP(outs)                                     # [n, c, p]
+        feat = self._pool_frames(outs, seqL)                      # [n, c, p]
         embed = self.FCs(feat)                                    # [n, c, p]
         _, logits = self.BNNecks(embed)                           # [n, 3, p]
+        if self.posture:                                          # mirror-invariant posture pattern over time
+            logits = logits + self.PostureStream(sils).unsqueeze(-1).to(logits.dtype)
         aux = [neck(embed)[1] for neck in self.AuxNecks]          # each [n, 2, p]
+        decision = self.StripWeights(embed, logits) if self.strip_mode == 'dynamic' else logits
 
         retval = {
             'training_feat': {
                 'triplet': {'embeddings': embed, 'labels': pids},
             },
-            'visual_summary': {'image/sils': rearrange(sils, 'n c s h w -> (n s) c h w')},
-            'inference_feat': {'embeddings': logits},
+            'visual_summary': {'image/sils': rearrange(sils[:, :1], 'n c s h w -> (n s) c h w')},
+            'inference_feat': {'embeddings': decision, 'embed': embed},   # embed [n, 256, p] for analysis
         }
         if aux:
             retval['inference_feat']['aux'] = torch.stack(aux, 1)  # [n, tasks, 2, p]
@@ -93,6 +276,10 @@ class ScoNetRobust(BaseModel):
             lp = self.log_priors()
             tf = retval['training_feat']
             tf['softmax'] = {'logits': logits, 'labels': label_ids, 'log_prior': lp['main']}
+            if self.strip_mode == 'dynamic':
+                tf['strip'] = {'logits': decision, 'labels': label_ids, 'log_prior': lp['main']}
+            if self.class_triplet:
+                tf['class_triplet'] = {'embeddings': embed, 'labels': label_ids}
             if self.aux_type == 'bam':
                 tf['bam'] = {'logits': aux[0], 'labels': (label_ids == 1).long(), 'log_prior': lp['bam']}
             elif self.aux_type == 'ordinal':

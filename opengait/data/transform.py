@@ -764,3 +764,28 @@ class DeskewSilCuttingTransform():
         if cutting != 0:
             x = x[..., cutting:-cutting]
         return x / self.divsor
+
+
+class MirrorSilCuttingTransform():
+    """Test-time probe (exp_2): left/right mirrored silhouettes, optionally after deskew, then the usual cut.
+    A model that relies on the image lean should collapse on mirrored input (checkpoint_2 notebook 08)."""
+
+    def __init__(self, divsor=255.0, cutting=None, deskew=False):
+        self.base = DeskewSilCuttingTransform(divsor, cutting) if deskew else BaseSilCuttingTransform(divsor, cutting)
+
+    def __call__(self, x):
+        return self.base(x)[..., ::-1].copy()
+
+
+class ShuffleSilCuttingTransform():
+    """Test-time probe (exp_2 T runs): the frames of each sequence in a fixed random order, then the usual cut.
+    A model that uses frame order (T_tconv) should change on shuffled input; a max-over-frames model cannot."""
+
+    def __init__(self, divsor=255.0, cutting=None, deskew=False, seed=0):
+        self.base = DeskewSilCuttingTransform(divsor, cutting) if deskew else BaseSilCuttingTransform(divsor, cutting)
+        self.seed = seed
+
+    def __call__(self, x):
+        x = self.base(x)
+        order = np.random.default_rng(self.seed + len(x)).permutation(len(x))
+        return x[order].copy()
