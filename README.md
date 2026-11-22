@@ -14,3 +14,13 @@ This folder has two parts:
 
 - **The Scoliosis1K dataset.** It is released under a signed agreement and is password-protected, so it is in `.gitignore`. Get it from the [project page](https://zhouzi180.github.io/Scoliosis1K/) and see `reproduce/datasets/README.md`.
 - **Checkpoints (`*.pt`) and TensorBoard files.** Too big for GitHub. The text logs, the per-checkpoint results and the cached test logits are included, so every notebook still runs and shows its results.
+
+## Checkpoint 2
+
+`checkpoint_2/` asks why ScoNet-MT misses the mild (neutral) class and whether published fixes really help:
+
+| Folder | What it is |
+|---|---|
+| `checkpoint_2/self_learning/` | Small-data notebooks 01-08: class imbalance, strip patterns, temporal pooling, ScoliGaitX, TG-MILNet, a robust pipeline, the flip / lean asymmetry. |
+| `checkpoint_2/experiments/exp_1/` | Val-split calibration of the checkpoint 1 model. |
+| `checkpoint_2/experiments/exp_2/` | Full-scale runs: 8 imbalance / head / input variants, temporal models, extra seeds, and the analysis (`analysis/runs.md`, `analysis/STORY.md`). |

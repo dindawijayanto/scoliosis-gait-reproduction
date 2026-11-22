@@ -10,3 +10,6 @@ reproduce/model_cnn/output/
 
 __pycache__/
 .ipynb_checkpoints/
+
+# paper PDFs (copyrighted; linked from the notebooks instead)
+checkpoint_2/self_learning/**/*.pdf
